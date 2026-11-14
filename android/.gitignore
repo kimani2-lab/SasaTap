@@ -1,0 +1,15 @@
+# Gradle / Android
+.gradle/
+.kotlin/
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+**/build/
+
+# Signing material must never be committed.
+key.properties
+**/*.keystore
+**/*.jks

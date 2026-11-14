@@ -1,0 +1,23 @@
+**/xcuserdata/
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.pbxuser
+!default.pbxuser
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+
+# Flutter / CocoaPods generated files
+Flutter/Generated.xcconfig
+Flutter/flutter_export_environment.sh
+Flutter/ephemeral/
+Pods/
+Podfile.lock
+.symlinks/
+.xcode.env.local
+Runner/GeneratedPluginRegistrant.h
+Runner/GeneratedPluginRegistrant.m
