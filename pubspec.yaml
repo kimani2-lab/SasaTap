@@ -1,7 +1,7 @@
 name: sasatap
 description: "SasaTap - a production-ready NFC toolkit for reading, writing, inspecting, and automating NFC tags."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.4+4
 
 environment:
   sdk: ">=3.11.0 <4.0.0"
