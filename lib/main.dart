@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sasatap/core/nfc_service.dart';
 import 'package:sasatap/features/home/home_page.dart';
+import 'package:sasatap/features/home/landing_page.dart';
 import 'package:sasatap/features/other/other_hub_page.dart';
 import 'package:sasatap/features/other/other_page.dart';
 import 'package:sasatap/features/other/other_provider.dart';
@@ -54,7 +55,7 @@ class SasaTapApp extends StatelessWidget {
   final SavedTagRepository savedTags;
   final AppSettings settings;
 
-  static const Color _seedColor = Color(0xFF16C7D9);
+  static const Color _seedColor = Color(0xFF075CF5);
 
   @override
   Widget build(BuildContext context) {
@@ -110,35 +111,35 @@ class SasaTapApp extends StatelessWidget {
           seedColor: _seedColor,
           brightness: brightness,
         ).copyWith(
-          primary: isDark ? const Color(0xFF59D8E8) : const Color(0xFF006B80),
-          onPrimary: isDark ? const Color(0xFF04202A) : Colors.white,
+          primary: isDark ? const Color(0xFF78A9FF) : const Color(0xFF075CF5),
+          onPrimary: isDark ? const Color(0xFF07152E) : Colors.white,
           primaryContainer: isDark
-              ? const Color(0xFF103A50)
-              : const Color(0xFFD1F4F8),
+              ? const Color(0xFF142C55)
+              : const Color(0xFFE5EDFF),
           onPrimaryContainer: isDark
-              ? const Color(0xFFB8F4FC)
-              : const Color(0xFF002F3B),
-          secondary: isDark ? const Color(0xFF4AA8F4) : const Color(0xFF315FA8),
+              ? const Color(0xFFD7E5FF)
+              : const Color(0xFF102C62),
+          secondary: isDark ? const Color(0xFF63D7F2) : const Color(0xFF087EB8),
           surface: isDark ? const Color(0xFF081322) : const Color(0xFFF4F7FA),
           surfaceContainerLowest: isDark
               ? const Color(0xFF060D18)
               : const Color(0xFFFFFFFF),
           surfaceContainerLow: isDark
               ? const Color(0xFF0B192A)
-              : const Color(0xFFF7F9FC),
+              : const Color(0xFFF8FAFF),
           surfaceContainer: isDark
               ? const Color(0xFF102238)
-              : const Color(0xFFEDF2F7),
+              : const Color(0xFFEEF3FF),
           surfaceContainerHigh: isDark
               ? const Color(0xFF152A42)
-              : const Color(0xFFE7EDF4),
+              : const Color(0xFFE8EEFA),
           surfaceContainerHighest: isDark
               ? const Color(0xFF1B334D)
-              : const Color(0xFFDDE5EE),
+              : const Color(0xFFDCE6FA),
           outline: isDark ? const Color(0xFF34516A) : const Color(0xFF728394),
           outlineVariant: isDark
               ? const Color(0xFF203A52)
-              : const Color(0xFFCAD4DE),
+              : const Color(0xFFCAD5EB),
         );
     return ThemeData(
       useMaterial3: true,
@@ -146,7 +147,7 @@ class SasaTapApp extends StatelessWidget {
       brightness: brightness,
       scaffoldBackgroundColor: isDark
           ? const Color(0xFF07111F)
-          : const Color(0xFFF4F7FA),
+          : const Color(0xFFF3F6FC),
       cardTheme: CardThemeData(
         color: isDark ? const Color(0xFF0D1D30) : Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -159,7 +160,7 @@ class SasaTapApp extends StatelessWidget {
         scrolledUnderElevation: 0,
         backgroundColor: isDark
             ? const Color(0xFF07111F)
-            : const Color(0xFFF4F7FA),
+            : const Color(0xFFF3F6FC),
         surfaceTintColor: Colors.transparent,
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -222,6 +223,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  bool _showLanding = true;
   int _index = 0;
   AppDestination? _destination;
 
@@ -236,6 +238,25 @@ class _HomeShellState extends State<HomeShell> {
 
   void _openDestination(AppDestination destination) {
     setState(() => _destination = destination);
+  }
+
+  void _enterDashboard() {
+    setState(() => _showLanding = false);
+  }
+
+  void _openLandingDestination(AppDestination destination) {
+    setState(() {
+      _showLanding = false;
+      _index = 0;
+      _destination = destination;
+    });
+  }
+
+  void _selectTab(int index) {
+    setState(() {
+      _index = index;
+      _destination = null;
+    });
   }
 
   Widget _buildTab(int index) {
@@ -268,10 +289,23 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showLanding) {
+      return LandingPage(
+        onGetStarted: _enterDashboard,
+        onOpenDestination: _openLandingDestination,
+      );
+    }
+
     final theme = Theme.of(context);
     final destination = _destination;
+    final useNavigationRail = MediaQuery.sizeOf(context).width >= 840;
     return Scaffold(
+      backgroundColor: theme.brightness == Brightness.dark
+          ? theme.scaffoldBackgroundColor
+          : Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         leading: destination == null
             ? null
             : IconButton(
@@ -321,22 +355,54 @@ class _HomeShellState extends State<HomeShell> {
       ),
       body: SafeArea(
         top: false,
-        child: destination == null
-            ? IndexedStack(
-                index: _index,
-                children: List<Widget>.generate(4, _buildTab),
-              )
-            : _buildDestination(destination),
+        child: Row(
+          children: [
+            if (useNavigationRail)
+              NavigationRail(
+                backgroundColor: Colors.transparent,
+                selectedIndex: _index,
+                groupAlignment: -0.8,
+                labelType: NavigationRailLabelType.all,
+                onDestinationSelected: _selectTab,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.contactless_outlined),
+                    selectedIcon: Icon(Icons.contactless),
+                    label: Text('NFC Tools'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.grid_view_outlined),
+                    selectedIcon: Icon(Icons.grid_view),
+                    label: Text('Other'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bookmark_border),
+                    selectedIcon: Icon(Icons.bookmark),
+                    label: Text('Saved'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings),
+                    label: Text('Settings'),
+                  ),
+                ],
+              ),
+            Expanded(
+              child: destination == null
+                  ? IndexedStack(
+                      index: _index,
+                      children: List<Widget>.generate(4, _buildTab),
+                    )
+                  : _buildDestination(destination),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: destination == null
+      bottomNavigationBar: !useNavigationRail && destination == null
           ? NavigationBar(
+              backgroundColor: Colors.transparent,
               selectedIndex: _index,
-              onDestinationSelected: (index) {
-                setState(() {
-                  _index = index;
-                  _destination = null;
-                });
-              },
+              onDestinationSelected: _selectTab,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.contactless_outlined),

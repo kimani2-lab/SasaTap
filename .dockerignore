@@ -1,0 +1,13 @@
+.git
+.dart_tool
+build
+coverage
+.idea
+.vscode
+*.iml
+test
+android
+ios
+linux
+macos
+windows

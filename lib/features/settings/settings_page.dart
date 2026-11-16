@@ -7,7 +7,7 @@ class AppSettings extends ChangeNotifier {
 
   static const _themeKey = 'sasatap.theme_mode';
   final SharedPreferences _preferences;
-  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode _themeMode = ThemeMode.light;
 
   ThemeMode get themeMode => _themeMode;
 
@@ -16,7 +16,8 @@ class AppSettings extends ChangeNotifier {
     _themeMode = switch (stored) {
       'system' => ThemeMode.system,
       'light' => ThemeMode.light,
-      _ => ThemeMode.dark,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.light,
     };
   }
 
