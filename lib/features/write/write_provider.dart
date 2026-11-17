@@ -83,8 +83,10 @@ class WriteProvider extends ChangeNotifier {
       notifyListeners();
       var verified = false;
       String? verifyError;
+      var storedRecords = records;
       try {
         final readBack = await _nfc.readRecords();
+        storedRecords = readBack;
         verified = _recordsMatch(records, readBack);
         if (!verified) {
           verifyError =
@@ -94,8 +96,14 @@ class WriteProvider extends ChangeNotifier {
         verifyError = error.message;
       }
 
+      // Keep the read-back records so saving this result stores what is
+      // actually on the tag rather than the message from before the write.
       _result = WriteResult(
-        scan: scan,
+        scan: NfcTagScan(
+          tag: scan.tag,
+          records: storedRecords,
+          scannedAt: scan.scannedAt,
+        ),
         bytesWritten: size,
         verified: verified,
         verifyError: verifyError,

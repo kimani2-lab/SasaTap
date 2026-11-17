@@ -6,7 +6,13 @@ COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get --enforce-lockfile
 
 COPY . .
-RUN flutter build web --release
+ARG SUPABASE_URL
+ARG SUPABASE_PUBLISHABLE_KEY
+ARG SUPABASE_AUTH_REDIRECT_URL
+RUN flutter build web --release \
+  --dart-define="SUPABASE_URL=${SUPABASE_URL}" \
+  --dart-define="SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}" \
+  --dart-define="SUPABASE_AUTH_REDIRECT_URL=${SUPABASE_AUTH_REDIRECT_URL}"
 
 FROM nginxinc/nginx-unprivileged:stable-alpine
 

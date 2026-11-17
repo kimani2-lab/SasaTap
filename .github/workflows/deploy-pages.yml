@@ -38,7 +38,19 @@ jobs:
         run: flutter pub get --enforce-lockfile
 
       - name: Build web demo
-        run: flutter build web --release --base-href "${{ steps.pages.outputs.base_path }}/"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "::error::Set the Supabase URL and publishable-key repository secrets."
+            exit 1
+          fi
+          flutter build web --release \
+            --base-href "${{ steps.pages.outputs.base_path }}/" \
+            --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+            --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY" \
+            --dart-define="SUPABASE_AUTH_REDIRECT_URL=https://kimani2-lab.github.io/SasaTap/"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

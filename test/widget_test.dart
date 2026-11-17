@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sasatap/features/home/landing_page.dart';
 import 'package:sasatap/features/saved/saved_tag_repository.dart';
 import 'package:sasatap/features/settings/settings_page.dart';
 import 'package:sasatap/features/tasks/task_repository.dart';
@@ -45,6 +46,12 @@ void main() {
       tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
       Colors.white,
     );
+    expect(find.byTooltip('Landing page'), findsOneWidget);
+    await tester.tap(find.byTooltip('Landing page'));
+    await tester.pumpAndSettle();
+    expect(find.text('Get started'), findsWidgets);
+    await tester.tap(find.text('Get started').last);
+    await tester.pumpAndSettle();
 
     await openNfcAction(tester, 'Read tag', 'Read NFC tag');
     await openNfcAction(tester, 'Write tag', 'Write NFC tag');
@@ -54,6 +61,7 @@ void main() {
     await tester.tap(find.text('Other').last);
     await tester.pumpAndSettle();
     expect(find.text('More tools'), findsOneWidget);
+    expect(find.byTooltip('Landing page'), findsOneWidget);
     expect(find.byKey(const ValueKey('app-page-background')), findsNothing);
 
     await tester.tap(find.text('Saved').last);
@@ -74,6 +82,37 @@ void main() {
     await tester.tap(find.text('Other').last);
     await tester.pumpAndSettle();
     expect(find.text('More tools'), findsOneWidget);
+  });
+
+  testWidgets('landing help explains the write form fields', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1200);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LandingPage(onGetStarted: () {}, onOpenDestination: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final question = find.text('What does each write field mean?');
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(question);
+    await tester.pumpAndSettle();
+    await tester.tap(question);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('SSID is the exact network name'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Payload for raw bytes written in hexadecimal'),
+      findsOneWidget,
+    );
   });
 }
 

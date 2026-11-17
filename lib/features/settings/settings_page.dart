@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AppSettings extends ChangeNotifier {
   AppSettings(this._preferences);
@@ -37,7 +38,10 @@ class AppSettings extends ChangeNotifier {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.accountEmail, this.onSignOut});
+
+  final String? accountEmail;
+  final Future<void> Function()? onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +65,35 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+          if (accountEmail != null && onSignOut != null) ...[
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.account_circle_outlined),
+                title: const Text('Signed in'),
+                subtitle: Text(accountEmail!),
+                trailing: IconButton(
+                  tooltip: 'Sign out',
+                  onPressed: () async {
+                    try {
+                      await onSignOut!();
+                    } on AuthException catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Could not sign out: ${error.message}',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -124,8 +157,10 @@ class SettingsPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     'Scans, saved tag snapshots, and automation rules are '
-                    'stored locally on this device. SasaTap does not upload '
-                    'tag data to a server.',
+                    'cached on this device. Saved tags sync to your signed-in '
+                    'account, remain private by default, and can be shared '
+                    'with an organization you belong to. Offline cache is '
+                    'partitioned by account.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -151,7 +186,7 @@ class SettingsPage extends StatelessWidget {
                 context: context,
                 applicationName: 'SasaTap',
                 applicationVersion: '1.0.0',
-                applicationLegalese: 'Local-first NFC tools.',
+                applicationLegalese: 'NFC tools with private account storage.',
               ),
             ),
           ),

@@ -6,7 +6,9 @@ import 'package:sasatap/core/hex_utils.dart';
 import 'package:sasatap/core/ndef_builder.dart';
 import 'package:sasatap/core/ndef_inspector.dart';
 import 'package:sasatap/core/nfc_service.dart';
+import 'package:sasatap/features/saved/saved_tag_repository.dart';
 import 'package:sasatap/features/write/write_provider.dart';
+import 'package:sasatap/shared/utils/tag_lock_flow.dart';
 import 'package:sasatap/shared/utils/ui_helpers.dart';
 import 'package:sasatap/shared/widgets/section_card.dart';
 
@@ -212,7 +214,10 @@ class _WritePageState extends State<WritePage> {
             if (provider.writing) _WriteProgressCard(status: provider.status),
             if (provider.error != null) _WriteErrorCard(error: provider.error!),
             if (provider.result != null)
-              _WriteResultCard(result: provider.result!),
+              _WriteResultCard(
+                key: ObjectKey(provider.result),
+                result: provider.result!,
+              ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -816,15 +821,83 @@ class _WriteErrorCard extends StatelessWidget {
   }
 }
 
-class _WriteResultCard extends StatelessWidget {
-  const _WriteResultCard({required this.result});
+class _WriteResultCard extends StatefulWidget {
+  const _WriteResultCard({super.key, required this.result});
 
   final WriteResult result;
 
   @override
+  State<_WriteResultCard> createState() => _WriteResultCardState();
+}
+
+class _WriteResultCardState extends State<_WriteResultCard> {
+  bool _saving = false;
+  bool _saved = false;
+  bool _locking = false;
+  bool _locked = false;
+
+  Future<void> _save() async {
+    if (_saving || _saved) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await context.read<SavedTagRepository>().save(widget.result.scan);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _saving = false;
+        _saved = true;
+      });
+      showAppSnackBar(context, 'Tag saved to your library.');
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _saving = false);
+      showAppSnackBar(context, 'Could not save tag: $error', isError: true);
+    }
+  }
+
+  Future<void> _lock() async {
+    if (_locking || _locked) {
+      return;
+    }
+    setState(() => _locking = true);
+    final locked = await showLockTagFlow(
+      context,
+      expectedUid: widget.result.scan.formattedUid,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _locking = false;
+      _locked = locked;
+    });
+    if (!locked) {
+      return;
+    }
+    try {
+      await context.read<SavedTagRepository>().markWriteProtected(
+        widget.result.scan.formattedUid,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Tag locked, but its saved status could not be updated: $error',
+          isError: true,
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final success = result.verified;
+    final success = widget.result.verified;
     final color = success ? scheme.primary : scheme.tertiary;
     return Card(
       color: color.withValues(alpha: 0.08),
@@ -849,15 +922,53 @@ class _WriteResultCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text('Tag: ${result.scan.formattedUid}'),
-            Text('Payload: ${formatBytes(result.bytesWritten)}'),
-            if (result.verifyError != null) ...[
+            Text('Tag: ${widget.result.scan.formattedUid}'),
+            Text('Payload: ${formatBytes(widget.result.bytesWritten)}'),
+            if (widget.result.verifyError != null) ...[
               const SizedBox(height: 8),
               Text(
-                result.verifyError!,
+                widget.result.verifyError!,
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: scheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (!_saved)
+                  FilledButton.tonalIcon(
+                    onPressed: _saving ? null : _save,
+                    icon: const Icon(Icons.bookmark_add_outlined),
+                    label: Text(_saving ? 'Saving…' : 'Save tag'),
+                  ),
+                if (_saved && !_locked)
+                  FilledButton.tonalIcon(
+                    onPressed: _locking ? null : _lock,
+                    icon: const Icon(Icons.lock_outline),
+                    label: Text(
+                      _locking ? 'Waiting for tag…' : 'Lock with password',
+                    ),
+                  ),
+                if (_saved)
+                  Chip(
+                    avatar: Icon(
+                      _locked ? Icons.lock : Icons.bookmark,
+                      size: 16,
+                    ),
+                    label: Text(_locked ? 'Saved and locked' : 'Saved'),
+                  ),
+              ],
+            ),
+            if (_saved && !_locked) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Locking asks you to hold the same tag again. The tag stays '
+                'readable, but rewriting it will require the password.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ],

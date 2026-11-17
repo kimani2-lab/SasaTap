@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sasatap/core/nfc_service.dart';
+import 'package:sasatap/features/auth/auth_gate.dart';
 import 'package:sasatap/features/home/home_page.dart';
 import 'package:sasatap/features/home/landing_page.dart';
 import 'package:sasatap/features/other/other_hub_page.dart';
@@ -20,25 +21,41 @@ import 'package:sasatap/features/tasks/tasks_provider.dart';
 import 'package:sasatap/features/write/write_page.dart';
 import 'package:sasatap/features/write/write_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const supabasePublishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+  );
+  SupabaseClient? supabaseClient;
+  final supabaseConfigured =
+      supabaseUrl.trim().isNotEmpty && supabasePublishableKey.trim().isNotEmpty;
+  if (supabaseConfigured) {
+    await Supabase.initialize(
+      url: supabaseUrl,
+      publishableKey: supabasePublishableKey,
+    );
+    supabaseClient = Supabase.instance.client;
+  }
 
   // Load persisted automation rules before the first frame so the Tasks tab
   // never flashes an empty list.
   final preferences = await SharedPreferences.getInstance();
   final repository = TaskRepository(preferences);
   await repository.load();
-  final savedTags = SavedTagRepository(preferences);
-  await savedTags.load();
   final settings = AppSettings(preferences);
   await settings.load();
 
   runApp(
     SasaTapApp(
       repository: repository,
-      savedTags: savedTags,
       settings: settings,
+      preferences: preferences,
+      supabaseClient: supabaseClient,
+      supabaseConfigurationMissing: !supabaseConfigured,
     ),
   );
 }
@@ -47,13 +64,19 @@ class SasaTapApp extends StatelessWidget {
   const SasaTapApp({
     super.key,
     required this.repository,
-    required this.savedTags,
     required this.settings,
+    this.savedTags,
+    this.preferences,
+    this.supabaseClient,
+    this.supabaseConfigurationMissing = false,
   });
 
   final TaskRepository repository;
-  final SavedTagRepository savedTags;
+  final SavedTagRepository? savedTags;
   final AppSettings settings;
+  final SharedPreferences? preferences;
+  final SupabaseClient? supabaseClient;
+  final bool supabaseConfigurationMissing;
 
   static const Color _seedColor = Color(0xFF075CF5);
 
@@ -62,7 +85,8 @@ class SasaTapApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<TaskRepository>.value(value: repository),
-        ChangeNotifierProvider<SavedTagRepository>.value(value: savedTags),
+        if (savedTags != null)
+          ChangeNotifierProvider<SavedTagRepository>.value(value: savedTags!),
         ChangeNotifierProvider<AppSettings>.value(value: settings),
         Provider<NfcService>(
           create: (_) => NfcService(),
@@ -98,7 +122,19 @@ class SasaTapApp extends StatelessWidget {
           theme: _buildTheme(Brightness.light),
           darkTheme: _buildTheme(Brightness.dark),
           themeMode: appSettings.themeMode,
-          home: const HomeShell(),
+          home: supabaseConfigurationMissing
+              ? const SupabaseConfigurationPage()
+              : supabaseClient != null && preferences != null
+              ? SupabaseAuthGate(
+                  client: supabaseClient!,
+                  preferences: preferences!,
+                  homeBuilder: ({required accountEmail, required onSignOut}) =>
+                      HomeShell(
+                        accountEmail: accountEmail,
+                        onSignOut: onSignOut,
+                      ),
+                )
+              : const HomeShell(),
         ),
       ),
     );
@@ -216,7 +252,10 @@ class SasaTapApp extends StatelessWidget {
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({super.key, this.accountEmail, this.onSignOut});
+
+  final String? accountEmail;
+  final Future<void> Function()? onSignOut;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -268,7 +307,10 @@ class _HomeShellState extends State<HomeShell> {
       case 2:
         return const SavedPage();
       case 3:
-        return const SettingsPage();
+        return SettingsPage(
+          accountEmail: widget.accountEmail,
+          onSignOut: widget.onSignOut,
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -285,6 +327,21 @@ class _HomeShellState extends State<HomeShell> {
       case AppDestination.tasks:
         return const TasksPage();
     }
+  }
+
+  Widget? _buildLeading(AppDestination? destination) {
+    if (destination != null) {
+      return IconButton(
+        tooltip: 'Back',
+        onPressed: () => setState(() => _destination = null),
+        icon: const Icon(Icons.arrow_back),
+      );
+    }
+    return IconButton(
+      tooltip: 'Landing page',
+      onPressed: () => setState(() => _showLanding = true),
+      icon: const Icon(Icons.arrow_back),
+    );
   }
 
   @override
@@ -306,13 +363,7 @@ class _HomeShellState extends State<HomeShell> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        leading: destination == null
-            ? null
-            : IconButton(
-                tooltip: 'Back',
-                onPressed: () => setState(() => _destination = null),
-                icon: const Icon(Icons.arrow_back),
-              ),
+        leading: _buildLeading(destination),
         title: destination == null
             ? Row(
                 mainAxisSize: MainAxisSize.min,

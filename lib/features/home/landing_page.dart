@@ -911,25 +911,82 @@ class _HelpCard extends StatelessWidget {
         ? const [
             (
               'How do I read a tag?',
-              'Open NFC Tools, choose Read tag, then hold your phone near the '
-                  'tag until the scan completes.',
+              'Open NFC Tools and choose Read tag, then hold the tag near the '
+                  'phone until the scan completes. SasaTap shows the UID, tag '
+                  'type, capacity and decoded NDEF records. Reading is passive '
+                  'and does not change the tag.',
             ),
             (
               'How do I write a tag?',
-              'Choose Write tag, select a record type and add its content. '
-                  'Then tap a writable NFC tag to write it.',
+              'Choose Write tag, select a record type, fill in the fields and '
+                  'add the record to your message. You can combine several '
+                  'records before writing. SasaTap checks available capacity, '
+                  'writes the message and reads it back to verify the result. '
+                  'Writing replaces the tag\'s existing NDEF message.',
+            ),
+            (
+              'Which record type should I choose?',
+              'Use URL / URI for links and app schemes, Text for plain messages '
+                  'with a language code, vCard for contact details, Wi-Fi for '
+                  'network credentials, and Custom MIME for app-specific '
+                  'payloads. Pick the type that matches how the tag will be '
+                  'used.',
+            ),
+            (
+              'What does each write field mean?',
+              'URL / URI stores a link or action such as https:, tel: or '
+                  'mailto:. Text is your message; Language code identifies '
+                  'its language, such as en or sw. vCard fields describe a '
+                  'contact: name, organization, job title, phone, email and '
+                  'website. Address and notes adds optional street, city, '
+                  'postal code, region, country and extra notes. For Wi-Fi, '
+                  'SSID is the exact network name, Security must match the '
+                  'router, and Password is its network password. Custom MIME '
+                  'uses MIME type to label the format and Payload for raw '
+                  'bytes written in hexadecimal. Fill only the fields you '
+                  'need.',
+            ),
+            (
+              'How do I save a tag?',
+              'After reading a tag, tap the bookmark icon on the result card. '
+                  'Saved tags live only on this device under the Saved tab, '
+                  'where you can search, review or remove them. Saving keeps a '
+                  'local reference; it does not copy or lock the physical tag.',
             ),
           ]
         : const [
             (
+              'How do I lock a tag after writing it?',
+              'Write and save the tag first. Then choose Lock with password on '
+                  'the write result or in the Saved tab. SasaTap asks you to '
+                  'hold the same tag again, then writes an NTAG password, PACK '
+                  'and protection settings. The tag stays readable, but '
+                  'rewriting it requires the password. This works on NTAG213, '
+                  'NTAG215 and NTAG216 tags.',
+            ),
+            (
+              'Can I unlock or change the password?',
+              'Password protection can be removed from Other → Tag tools by '
+                  'scanning the tag and entering the current password. A '
+                  'permanent read-only lock is different: it cannot be undone. '
+                  'Store the password and PACK safely; losing them can leave '
+                  'the tag permanently unwritable.',
+            ),
+            (
               'What can automations do?',
-              'Create a task with actions and a tag trigger. SasaTap runs the '
-                  'enabled actions when that tag is scanned.',
+              'Automations connect a tag to actions. Create a task, add the '
+                  'actions you want, then choose the tag trigger. When that tag '
+                  'is scanned in SasaTap, the enabled actions run. Links are '
+                  'copied instead of opened automatically so you stay in '
+                  'control.',
             ),
             (
               'Why is my tag not detected?',
-              'Make sure NFC is enabled and move the tag near your phone’s NFC '
-                  'antenna. Antenna position varies by device.',
+              'Check that NFC is on, remove thick cases and hold the tag '
+                  'against the NFC antenna, which is often near the top of the '
+                  'phone. Keep the tag still, confirm that the tag type is '
+                  'supported, and try another position if the first scan does '
+                  'not start.',
             ),
           ];
 
