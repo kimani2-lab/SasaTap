@@ -126,6 +126,46 @@ class WriteProvider extends ChangeNotifier {
     }
   }
 
+  /// Writes an Android-compatible Wi-Fi WSC record in one NFC session.
+  Future<void> writeInstantWifi(WifiCredentials credentials) async {
+    if (_writing) {
+      return;
+    }
+
+    _writing = true;
+    _error = null;
+    _result = null;
+    _status = 'Preparing the Wi-Fi record…';
+    notifyListeners();
+
+    try {
+      final record = NdefBuilder.wifi(credentials);
+      final size = NdefBuilder.encodedSize(<ndef.NDEFRecord>[record]);
+
+      _status = 'Waiting for an NFC tag…';
+      notifyListeners();
+      final scan = await _nfc.writeInstantRecord(
+        record,
+        alertMessage: 'Hold the tag near the phone to write Wi-Fi',
+      );
+
+      _result = WriteResult(scan: scan, bytesWritten: size, verified: false);
+      _status = 'Wi-Fi tag written';
+    } on NfcException catch (error) {
+      _error = error;
+      _status = '';
+    } on FormatException catch (error) {
+      _error = NfcException('invalid_input', error.message.toString());
+      _status = '';
+    } on Object catch (error) {
+      _error = NfcException('unexpected', error.toString());
+      _status = '';
+    } finally {
+      _writing = false;
+      notifyListeners();
+    }
+  }
+
   void clear() {
     _result = null;
     _error = null;

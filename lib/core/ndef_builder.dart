@@ -5,19 +5,17 @@ import 'package:ndef/ndef.dart' as ndef;
 
 /// Wi-Fi security modes supported by the Wi-Fi Simple Configuration (WSC)
 /// payload builder.
-enum WifiSecurity { open, wpaPersonal, wpa2Personal, wpaWpa2Mixed }
+enum WifiSecurity { wpaWpa2, wep, open }
 
 extension WifiSecurityInfo on WifiSecurity {
   String get label {
     switch (this) {
+      case WifiSecurity.wpaWpa2:
+        return 'WPA/WPA2';
+      case WifiSecurity.wep:
+        return 'WEP';
       case WifiSecurity.open:
-        return 'Open';
-      case WifiSecurity.wpaPersonal:
-        return 'WPA Personal';
-      case WifiSecurity.wpa2Personal:
-        return 'WPA2 Personal';
-      case WifiSecurity.wpaWpa2Mixed:
-        return 'WPA/WPA2 Mixed';
+        return 'Open/None';
     }
   }
 
@@ -25,27 +23,23 @@ extension WifiSecurityInfo on WifiSecurity {
 
   int get _authenticationType {
     switch (this) {
+      case WifiSecurity.wpaWpa2:
+        return 0x0020;
+      case WifiSecurity.wep:
+        return 0x0001;
       case WifiSecurity.open:
         return 0x0001;
-      case WifiSecurity.wpaPersonal:
-        return 0x0002;
-      case WifiSecurity.wpa2Personal:
-        return 0x0020;
-      case WifiSecurity.wpaWpa2Mixed:
-        return 0x0022;
     }
   }
 
   int get _encryptionType {
     switch (this) {
+      case WifiSecurity.wpaWpa2:
+        return 0x0008;
+      case WifiSecurity.wep:
+        return 0x0002;
       case WifiSecurity.open:
         return 0x0001;
-      case WifiSecurity.wpaPersonal:
-        return 0x0004;
-      case WifiSecurity.wpa2Personal:
-        return 0x0008;
-      case WifiSecurity.wpaWpa2Mixed:
-        return 0x000C;
     }
   }
 }
@@ -55,7 +49,7 @@ class WifiCredentials {
   const WifiCredentials({
     required this.ssid,
     this.password = '',
-    this.security = WifiSecurity.wpa2Personal,
+    this.security = WifiSecurity.wpaWpa2,
   });
 
   final String ssid;
@@ -163,17 +157,32 @@ class NdefBuilder {
   ///
   /// The payload follows the Wi-Fi Simple Configuration Credential format:
   /// a Credential TLV (0x100E) wrapping the network index, SSID,
-  /// authentication type, encryption type and network key.
+  /// authentication type, encryption type, network key and broadcast MAC.
+  /// Android recognises this record and can show its native Wi-Fi prompt.
   static ndef.MimeRecord wifi(WifiCredentials credentials) {
     final ssid = credentials.ssid.trim();
     if (ssid.isEmpty) {
       throw const FormatException('Enter the Wi-Fi network name (SSID).');
     }
-    if (credentials.security.requiresPassword &&
-        credentials.password.length < 8) {
+    if (utf8.encode(ssid).length > 32) {
       throw const FormatException(
-        'WPA/WPA2 passwords must contain at least 8 characters.',
+        'Wi-Fi network names cannot exceed 32 bytes.',
       );
+    }
+    if (credentials.security.requiresPassword) {
+      if (credentials.security == WifiSecurity.wpaWpa2 &&
+          (credentials.password.length < 8 ||
+              credentials.password.length > 63)) {
+        throw const FormatException(
+          'WPA/WPA2 passwords must contain 8 to 63 characters.',
+        );
+      }
+      if (credentials.security == WifiSecurity.wep &&
+          credentials.password.length < 5) {
+        throw const FormatException(
+          'WEP keys must contain at least 5 characters.',
+        );
+      }
     }
 
     final credential = <int>[
@@ -183,6 +192,7 @@ class NdefBuilder {
       ..._tlv(0x100F, _uint16(credentials.security._encryptionType)),
       if (credentials.security.requiresPassword)
         ..._tlv(0x1027, utf8.encode(credentials.password)),
+      ..._tlv(0x1020, const <int>[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
     ];
 
     return ndef.MimeRecord(
@@ -227,12 +237,10 @@ class NdefBuilder {
       if (data.organization.trim().isNotEmpty)
         'ORG:${_escape(data.organization)}',
       if (data.title.trim().isNotEmpty) 'TITLE:${_escape(data.title)}',
-      if (data.phone.trim().isNotEmpty)
-        'TEL;TYPE=CELL:${_escape(data.phone)}',
+      if (data.phone.trim().isNotEmpty) 'TEL;TYPE=CELL:${_escape(data.phone)}',
       if (data.email.trim().isNotEmpty)
         'EMAIL;TYPE=INTERNET:${_escape(data.email)}',
-      if (data.website.trim().isNotEmpty)
-        'URL:${_escape(data.website.trim())}',
+      if (data.website.trim().isNotEmpty) 'URL:${_escape(data.website.trim())}',
       if (_hasAddress(data))
         'ADR;TYPE=WORK:;;${_escape(data.street)};${_escape(data.city)};'
             '${_escape(data.region)};${_escape(data.postalCode)};'

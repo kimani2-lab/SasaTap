@@ -46,8 +46,8 @@ void main() {
       tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
       Colors.white,
     );
-    expect(find.byTooltip('Landing page'), findsOneWidget);
-    await tester.tap(find.byTooltip('Landing page'));
+    expect(find.byTooltip('Landing page'), findsNothing);
+    await tester.drag(find.byType(IndexedStack), const Offset(150, 0));
     await tester.pumpAndSettle();
     expect(find.text('Get started'), findsWidgets);
     await tester.tap(find.text('Get started').last);
@@ -61,8 +61,14 @@ void main() {
     await tester.tap(find.text('Other').last);
     await tester.pumpAndSettle();
     expect(find.text('More tools'), findsOneWidget);
-    expect(find.byTooltip('Landing page'), findsOneWidget);
+    expect(find.byTooltip('Landing page'), findsNothing);
     expect(find.byKey(const ValueKey('app-page-background')), findsNothing);
+
+    await tester.drag(find.byType(IndexedStack), const Offset(150, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Get started'), findsWidgets);
+    await tester.tap(find.text('Get started').last);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Saved').last);
     await tester.pumpAndSettle();
@@ -82,6 +88,63 @@ void main() {
     await tester.tap(find.text('Other').last);
     await tester.pumpAndSettle();
     expect(find.text('More tools'), findsOneWidget);
+  });
+
+  testWidgets('Wi-Fi writer validates guest network settings', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1200);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final tasks = TaskRepository(preferences);
+    final savedTags = SavedTagRepository(preferences);
+    final settings = AppSettings(preferences);
+    await tasks.load();
+    await savedTags.load();
+    await settings.load();
+
+    await tester.pumpWidget(
+      SasaTapApp(repository: tasks, savedTags: savedTags, settings: settings),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Get started').last);
+    await tester.pumpAndSettle();
+
+    final writeAction = find.text('Write tag');
+    await tester.scrollUntilVisible(
+      writeAction,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(writeAction);
+    await tester.pumpAndSettle();
+    expect(find.text('Write NFC tag'), findsOneWidget);
+
+    final wifiType = find.text('Wi-Fi Network');
+    await tester.scrollUntilVisible(
+      wifiType,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(wifiType);
+    await tester.pumpAndSettle();
+    expect(find.text('Instant Guest Wi-Fi'), findsOneWidget);
+    expect(find.text('8 to 63 characters.'), findsOneWidget);
+
+    await tester.tap(find.text('WPA/WPA2'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open/None').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Not used for open networks.'), findsOneWidget);
+
+    final writeButton = find.text('Write to NFC Tag');
+    await tester.ensureVisible(writeButton);
+    await tester.pumpAndSettle();
+    await tester.tap(writeButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Enter the Wi-Fi network name.'), findsOneWidget);
   });
 
   testWidgets('landing help explains the write form fields', (tester) async {

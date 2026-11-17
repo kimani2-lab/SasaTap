@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ndef/ndef.dart' as ndef;
@@ -7,6 +9,7 @@ import 'package:sasatap/core/ndef_builder.dart';
 import 'package:sasatap/core/ndef_inspector.dart';
 import 'package:sasatap/core/nfc_service.dart';
 import 'package:sasatap/features/saved/saved_tag_repository.dart';
+import 'package:sasatap/features/write/instant_wifi_write_sheet.dart';
 import 'package:sasatap/features/write/write_provider.dart';
 import 'package:sasatap/shared/utils/tag_lock_flow.dart';
 import 'package:sasatap/shared/utils/ui_helpers.dart';
@@ -31,7 +34,7 @@ extension on _DraftType {
       case _DraftType.vCard:
         return 'vCard';
       case _DraftType.wifi:
-        return 'Wi-Fi';
+        return 'Wi-Fi Network';
       case _DraftType.customMime:
         return 'Custom MIME';
     }
@@ -88,7 +91,7 @@ class _WritePageState extends State<WritePage> {
   final _wifiPassword = TextEditingController();
   final _mimeType = TextEditingController(text: 'application/octet-stream');
   final _payloadHex = TextEditingController();
-  WifiSecurity _security = WifiSecurity.wpa2Personal;
+  WifiSecurity _security = WifiSecurity.wpaWpa2;
   bool _obscureWifiPassword = true;
 
   @override
@@ -193,7 +196,7 @@ class _WritePageState extends State<WritePage> {
               ),
             ),
             const SizedBox(height: 10),
-            Form(key: _formKey, child: _buildFormCard()),
+            Form(key: _formKey, child: _buildFormCard(provider)),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: provider.writing ? null : _addRecord,
@@ -218,29 +221,31 @@ class _WritePageState extends State<WritePage> {
                 key: ObjectKey(provider.result),
                 result: provider.result!,
               ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: provider.writing ? null : _submit,
-                icon: const Icon(Icons.nfc),
-                label: Text(provider.writing ? 'Writing…' : 'Write to tag'),
+            if (_type != _DraftType.wifi || _records.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: provider.writing ? null : _submit,
+                  icon: const Icon(Icons.nfc),
+                  label: Text(provider.writing ? 'Writing…' : 'Write to tag'),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Writing replaces the tag\'s current NDEF message. Keep the tag '
-              'against the phone until verification completes.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+              const SizedBox(height: 8),
+              Text(
+                'Writing replaces the tag\'s current NDEF message. Keep the tag '
+                'against the phone until verification completes.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         );
       },
     );
   }
 
-  Widget _buildFormCard() {
+  Widget _buildFormCard(WriteProvider provider) {
     switch (_type) {
       case _DraftType.uri:
         return SectionCard(
@@ -443,8 +448,10 @@ class _WritePageState extends State<WritePage> {
         );
       case _DraftType.wifi:
         return SectionCard(
-          title: 'Wi-Fi network',
-          subtitle: 'Creates a Wi-Fi Simple Configuration record.',
+          title: 'Instant Guest Wi-Fi',
+          subtitle:
+              'Creates an Android-compatible Wi-Fi Simple Configuration '
+              'record.',
           icon: Icons.wifi,
           child: Column(
             children: [
@@ -453,17 +460,25 @@ class _WritePageState extends State<WritePage> {
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Network name (SSID)',
+                  helperText: 'Case-sensitive, up to 32 bytes.',
                   prefixIcon: Icon(Icons.wifi),
                 ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Enter the Wi-Fi network name.'
-                    : null,
+                validator: (value) {
+                  final ssid = value?.trim() ?? '';
+                  if (ssid.isEmpty) {
+                    return 'Enter the Wi-Fi network name.';
+                  }
+                  if (utf8.encode(ssid).length > 32) {
+                    return 'Network names cannot exceed 32 bytes.';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<WifiSecurity>(
                 initialValue: _security,
                 decoration: const InputDecoration(
-                  labelText: 'Security',
+                  labelText: 'Security type',
                   prefixIcon: Icon(Icons.shield_outlined),
                 ),
                 items: [
@@ -479,45 +494,78 @@ class _WritePageState extends State<WritePage> {
                   }
                 },
               ),
-              if (_security.requiresPassword) ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _wifiPassword,
-                  obscureText: _obscureWifiPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.password),
-                    suffixIcon: IconButton(
-                      tooltip: _obscureWifiPassword
-                          ? 'Show password'
-                          : 'Hide password',
-                      onPressed: () {
-                        setState(
-                          () => _obscureWifiPassword = !_obscureWifiPassword,
-                        );
-                      },
-                      icon: Icon(
-                        _obscureWifiPassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _wifiPassword,
+                enabled: _security.requiresPassword,
+                obscureText: _obscureWifiPassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  helperText: _security.requiresPassword
+                      ? (_security == WifiSecurity.wep
+                            ? 'WEP key, at least 5 characters.'
+                            : '8 to 63 characters.')
+                      : 'Not used for open networks.',
+                  prefixIcon: const Icon(Icons.password),
+                  suffixIcon: IconButton(
+                    tooltip: _obscureWifiPassword
+                        ? 'Show password'
+                        : 'Hide password',
+                    onPressed: _security.requiresPassword
+                        ? () {
+                            setState(
+                              () =>
+                                  _obscureWifiPassword = !_obscureWifiPassword,
+                            );
+                          }
+                        : null,
+                    icon: Icon(
+                      _obscureWifiPassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                     ),
                   ),
-                  validator: (value) {
-                    if (_security.requiresPassword &&
-                        (value == null || value.length < 8)) {
-                      return 'WPA/WPA2 passwords need at least 8 characters.';
+                ),
+                validator: (value) {
+                  if (!_security.requiresPassword) {
+                    return null;
+                  }
+                  final password = value ?? '';
+                  if (_security == WifiSecurity.wep) {
+                    if (password.length < 5) {
+                      return 'WEP keys need at least 5 characters.';
                     }
                     return null;
-                  },
+                  }
+                  if (password.length < 8) {
+                    return 'WPA/WPA2 passwords need at least 8 characters.';
+                  }
+                  if (password.length > 63) {
+                    return 'WPA/WPA2 passwords cannot exceed 63 characters.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: provider.writing
+                      ? null
+                      : () => _writeInstantWifi(provider),
+                  icon: const Icon(Icons.nfc),
+                  label: Text(
+                    provider.writing ? 'Writing…' : 'Write to NFC Tag',
+                  ),
                 ),
-              ],
+              ),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Wi-Fi tag handling varies by phone. iPhones do not join '
-                  'networks automatically from NFC tags.',
+                  'Android can show a native “Connect to Wi-Fi?” prompt when '
+                  'the tag is tapped. iPhones do not join networks '
+                  'automatically from NFC tags.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -643,6 +691,33 @@ class _WritePageState extends State<WritePage> {
         _payloadHex.clear();
         break;
     }
+  }
+
+  Future<void> _writeInstantWifi(WriteProvider provider) async {
+    if (provider.writing) {
+      return;
+    }
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    final credentials = WifiCredentials(
+      ssid: _ssid.text.trim(),
+      password: _security.requiresPassword ? _wifiPassword.text : '',
+      security: _security,
+    );
+    try {
+      NdefBuilder.wifi(credentials);
+    } on FormatException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, isError: true);
+      }
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    provider.clear();
+    await showInstantWifiWriteSheet(context, credentials: credentials);
   }
 
   Future<void> _submit() async {

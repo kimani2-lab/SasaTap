@@ -218,6 +218,89 @@ class NfcService {
     return writeRecords(<ndef.NDEFRecord>[record], maxCapacity: maxCapacity);
   }
 
+  /// Writes a single record and always closes the platform session.
+  ///
+  /// This is used by the instant Wi-Fi onboarding flow. Unlike the
+  /// scan-then-write workflow, the whole poll/write/finish lifecycle is owned
+  /// here so a read-only tag, timeout or capacity failure cannot leave a
+  /// session open.
+  Future<NfcTagScan> writeInstantRecord(
+    ndef.NDEFRecord record, {
+    Duration timeout = const Duration(seconds: 20),
+    String alertMessage = 'Hold your phone near the tag to write',
+  }) async {
+    if (_operationInProgress) {
+      throw const NfcException(
+        'busy',
+        'Another NFC operation is already running.',
+        hint: 'Wait for it to finish before starting a new write.',
+      );
+    }
+
+    _operationInProgress = true;
+    var finishMessage = 'Write failed';
+    try {
+      await _ensureAvailable();
+      await close();
+
+      final tag = await FlutterNfcKit.poll(
+        timeout: timeout,
+        iosAlertMessage: alertMessage,
+        iosMultipleTagMessage:
+            'More than one tag was detected. Leave only one tag near the '
+            'phone.',
+        androidCheckNDEF: true,
+      );
+      _sessionOpen = true;
+      _lastTag = tag;
+
+      if (tag.ndefWritable != true) {
+        throw const NfcException(
+          'not_writable',
+          'This NFC tag is read-only.',
+          hint:
+              'Use a writable tag, or remove its lock or password '
+              'protection first.',
+        );
+      }
+
+      final capacity =
+          tag.ndefCapacity ??
+          (tag.type == NFCTagType.mifare_ultralight
+              ? _type2Capacity(tag)
+              : null);
+      final size = ndef.encodeNdefMessage(<ndef.NDEFRecord>[record]).length;
+      if (capacity != null && capacity > 0 && size > capacity) {
+        throw NfcException(
+          'message_too_large',
+          'The Wi-Fi payload is $size bytes, but this tag can hold about '
+              '$capacity bytes.',
+          hint:
+              'Use a larger tag such as NTAG215, or shorten the network name '
+              'or password.',
+        );
+      }
+
+      await FlutterNfcKit.writeNDEFRecords(<ndef.NDEFRecord>[record]);
+      final scan = NfcTagScan(tag: tag, records: <ndef.NDEFRecord>[record]);
+      _lastScan = scan;
+      finishMessage = 'Wi-Fi tag written';
+      return scan;
+    } on Object catch (error) {
+      throw _mapError(error);
+    } finally {
+      _sessionOpen = false;
+      _lastTag = null;
+      _lastScan = null;
+      try {
+        await FlutterNfcKit.finish(iosAlertMessage: finishMessage);
+      } on Object {
+        // The platform may have already ended a failed polling session.
+      }
+      _operationInProgress = false;
+    }
+  }
+
   /// Locks the NDEF area of the connected tag. This is irreversible.
   Future<void> makeReadOnly(NfcTagScan scan) {
     return _run(() async {

@@ -265,6 +265,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _showLanding = true;
   int _index = 0;
   AppDestination? _destination;
+  double _swipeDistance = 0;
 
   static const _tabTitles = ['NFC Tools', 'Other', 'Saved', 'Settings'];
 
@@ -330,18 +331,35 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Widget? _buildLeading(AppDestination? destination) {
-    if (destination != null) {
-      return IconButton(
-        tooltip: 'Back',
-        onPressed: () => setState(() => _destination = null),
-        icon: const Icon(Icons.arrow_back),
-      );
+    if (destination == null) {
+      return null;
     }
     return IconButton(
-      tooltip: 'Landing page',
-      onPressed: () => setState(() => _showLanding = true),
+      tooltip: 'Back',
+      onPressed: () => setState(() => _destination = null),
       icon: const Icon(Icons.arrow_back),
     );
+  }
+
+  void _onDashboardSwipeStart(DragStartDetails details) {
+    _swipeDistance = 0;
+  }
+
+  void _onDashboardSwipeUpdate(DragUpdateDetails details) {
+    _swipeDistance += details.delta.dx;
+  }
+
+  void _onDashboardSwipeEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldReturn = _swipeDistance > 80 || velocity > 500;
+    _swipeDistance = 0;
+    if (shouldReturn) {
+      setState(() => _showLanding = true);
+    }
+  }
+
+  void _onDashboardSwipeCancel() {
+    _swipeDistance = 0;
   }
 
   @override
@@ -440,9 +458,16 @@ class _HomeShellState extends State<HomeShell> {
               ),
             Expanded(
               child: destination == null
-                  ? IndexedStack(
-                      index: _index,
-                      children: List<Widget>.generate(4, _buildTab),
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragStart: _onDashboardSwipeStart,
+                      onHorizontalDragUpdate: _onDashboardSwipeUpdate,
+                      onHorizontalDragEnd: _onDashboardSwipeEnd,
+                      onHorizontalDragCancel: _onDashboardSwipeCancel,
+                      child: IndexedStack(
+                        index: _index,
+                        children: List<Widget>.generate(4, _buildTab),
+                      ),
                     )
                   : _buildDestination(destination),
             ),
